@@ -1,0 +1,124 @@
+﻿<Window x:Class="SQL_Export.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:SQL_Export"
+        mc:Ignorable="d"
+        Title="SQL Extract" Height="450" Width="370"
+		ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
+		Icon="cells.ico"
+		>
+	<Window.Resources>
+		<Style TargetType="StackPanel" >
+			<Setter Property="Margin" Value="0 5" />
+		</Style>
+
+		<Style TargetType="Label" >
+			<Setter Property="HorizontalContentAlignment" Value="Right" />
+			<Setter Property="VerticalContentAlignment" Value="Center" />
+			<Setter Property="Padding" Value="0 0 5 0" />
+			<Setter Property="Width" Value="100" />
+		</Style>
+		<Style TargetType="TextBox">
+			<Setter Property="VerticalContentAlignment" Value="Center" />
+		</Style>
+	</Window.Resources>
+
+	<Grid HorizontalAlignment="Center" >
+		<Grid.RowDefinitions>
+			<RowDefinition Height="*" />
+			<RowDefinition Height="30" />
+		</Grid.RowDefinitions>
+		<WrapPanel Orientation="Vertical" >
+			<WrapPanel.Style>
+				<Style TargetType="WrapPanel">
+					<Setter Property="Margin" Value="0" />
+				</Style>
+			</WrapPanel.Style>
+			
+			<!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~-->
+			<!--Μενού επιλογών για αναζήτηση και σύνδεση σε SQL Database-->
+			<!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~-->
+			
+			<!--<StackPanel>
+				<StackPanel Orientation="Horizontal">
+				<Label Content="SQL Instance: " />
+				<ComboBox Width="200" ItemsSource="{Binding SqlInstances}" SelectedValue="{Binding SelectedSqlInstance, UpdateSourceTrigger=PropertyChanged}"/>
+			</StackPanel>
+			<StackPanel Orientation="Horizontal">
+				<Label Content="Login: " />
+				<TextBox Width="200" Text="{Binding LoginSQL, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}"/>
+			</StackPanel>
+			<StackPanel Orientation="Horizontal">
+				<Label Content="Password: " />
+				<TextBox Width="200" Text="{Binding PasswordSQL, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+				<Button Margin="5 0 5 0" Width="100" Content="Connect" Command="{Binding ConnectSQL_Command}"/>
+				<Button Margin="5 0 5 0" Width="100" Content="Disconnect" Command="{Binding DisconnectSQL_Command}"/>
+			</StackPanel>
+			<StackPanel Orientation="Horizontal">
+				<Label Content="SQL Database: " />
+				<ComboBox Width="200" ItemsSource="{Binding SqlDatabases}" SelectedItem="{Binding SelectedSQLDatabase, Mode=TwoWay}"/>
+			</StackPanel>
+			</StackPanel>-->
+
+			<StackPanel Orientation="Horizontal">
+				<Label Content="Server Name:" Margin="10 0"/>
+				<TextBox Text="{Binding SelectedSqlInstance, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" Width="150"/>
+			</StackPanel>
+			<StackPanel Orientation="Horizontal">
+				<Label Content="Username:" Margin="10 0"/>
+				<TextBox Text="{Binding LoginSQL, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" Width="150" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal">
+				<Label Content="Password:" Margin="10 0"/>
+				<TextBox Text="{Binding PasswordSQL, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" Width="150"/>
+			</StackPanel>
+			<StackPanel Orientation="Horizontal">
+				<Label Content="Database:" Margin="10 0"/>
+				<TextBox Text="{Binding SelectedSQLDatabase, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" Width="150" 
+						
+						 />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal">
+				<Label Content="Database:" Margin="10 0"/>
+				<ComboBox 
+					ItemsSource="{Binding SqlDatabases}"
+					IsEnabled="{Binding IsComboBoxEnabled}"
+					Width="150" />
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="20, 0" Height="40">
+				<WrapPanel Orientation="Vertical" >
+					<CheckBox Margin="2" Content="Κρεοπωλείο" IsChecked="{Binding IsButcher, Mode=TwoWay}"/>
+					<CheckBox Margin="2" Content="Προμηθευτές" IsChecked="{Binding IsSupplier, Mode=TwoWay}"/>
+				</WrapPanel>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="20">
+				<Button Margin="5 0 5 0" Width="60" Content="Connect" Command="{Binding ConnectSQL_Command}" />
+				<Button Margin="5 0 5 0" Width="60" Content="Close" Command="{Binding DisConnectSQL_Command}" />
+				<Button Margin="5 0 5 0" Width="60" Content="Extract" Command="{Binding ExtractData_Command}" />
+			</StackPanel>
+			
+			<!--Δεν θα χρησιμοποιήσω τα tables τελικά-->
+			<!--<ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Height="150">
+				<ItemsControl ItemsSource="{Binding DatabaseCheckboxList}">
+					<ItemsControl.ItemsPanel>
+						<ItemsPanelTemplate>
+							<StackPanel Orientation="Vertical" />
+						</ItemsPanelTemplate>
+					</ItemsControl.ItemsPanel>
+				</ItemsControl>
+			</ScrollViewer>-->
+
+		</WrapPanel>
+		<StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left">
+			<Label Width="40" Content="Status: " />
+			<Label Content="{Binding ConnectionState}" />
+		</StackPanel>
+			
+	</Grid>
+</Window>
