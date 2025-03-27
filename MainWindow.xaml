@@ -5,43 +5,28 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SQL_Export"
         mc:Ignorable="d"
-        Title="SQL Extract" Height="450" Width="370"
+        Title="SQL Extract" Height="450" Width="350"
 		ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
 		Icon="cells.ico"
 		>
-	<Window.Resources>
-		<Style TargetType="StackPanel" >
-			<Setter Property="Margin" Value="0 5" />
-		</Style>
-
-		<Style TargetType="Label" >
-			<Setter Property="HorizontalContentAlignment" Value="Right" />
-			<Setter Property="VerticalContentAlignment" Value="Center" />
-			<Setter Property="Padding" Value="0 0 5 0" />
-			<Setter Property="Width" Value="100" />
-		</Style>
-		<Style TargetType="TextBox">
-			<Setter Property="VerticalContentAlignment" Value="Center" />
-		</Style>
-	</Window.Resources>
-
 	<Grid HorizontalAlignment="Center" >
 		<Grid.RowDefinitions>
 			<RowDefinition Height="*" />
 			<RowDefinition Height="30" />
 		</Grid.RowDefinitions>
-		<WrapPanel Orientation="Vertical" >
-			<WrapPanel.Style>
+		<WrapPanel Orientation="Vertical" Margin="0" Width="300" Grid.Row="0">
+			<!--<WrapPanel.Style>
 				<Style TargetType="WrapPanel">
 					<Setter Property="Margin" Value="0" />
 				</Style>
-			</WrapPanel.Style>
+			</WrapPanel.Style>-->
 			
 			<!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~-->
 			<!--Μενού επιλογών για αναζήτηση και σύνδεση σε SQL Database-->
 			<!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~-->
 			
-			<!--<StackPanel>
+			<!--
+			<StackPanel>
 				<StackPanel Orientation="Horizontal">
 				<Label Content="SQL Instance: " />
 				<ComboBox Width="200" ItemsSource="{Binding SqlInstances}" SelectedValue="{Binding SelectedSqlInstance, UpdateSourceTrigger=PropertyChanged}"/>
@@ -62,31 +47,45 @@
 				<Label Content="SQL Database: " />
 				<ComboBox Width="200" ItemsSource="{Binding SqlDatabases}" SelectedItem="{Binding SelectedSQLDatabase, Mode=TwoWay}"/>
 			</StackPanel>
-			</StackPanel>-->
+			</StackPanel>
+			-->
+			<WrapPanel.Resources>
+				<Style TargetType="StackPanel">
+					<Setter Property="Orientation" Value="Horizontal" />
+					<Setter Property="Height" Value="25" />
+					<Setter Property="Margin" Value="2" />
+					<Setter Property="Width" Value="auto" />
+					<Setter Property="VerticalAlignment" Value="Center" />
+				</Style>
 
-			<StackPanel Orientation="Horizontal">
-				<Label Content="Server Name:" Margin="10 0"/>
-				<TextBox Text="{Binding SelectedSqlInstance, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" Width="150"/>
+				<Style TargetType="TextBox">
+					<Setter Property="Width" Value="150" />
+				</Style>
+
+				<Style TargetType="Label">
+					<Setter Property="Width" Value="100" />
+					<Setter Property="HorizontalContentAlignment" Value="Right" />
+					<Setter Property="VerticalContentAlignment" Value="Center" />
+				</Style>
+			</WrapPanel.Resources>
+			<StackPanel>
+				<Label Content="Server Name:" />
+				<TextBox Text="{Binding SelectedSqlInstance, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}"/>
 			</StackPanel>
-			<StackPanel Orientation="Horizontal">
-				<Label Content="Username:" Margin="10 0"/>
-				<TextBox Text="{Binding LoginSQL, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" Width="150" />
+			<StackPanel>
+				<Label Content="Username:" />
+				<TextBox Text="{Binding LoginSQL, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" />
 			</StackPanel>
-			<StackPanel Orientation="Horizontal">
-				<Label Content="Password:" Margin="10 0"/>
-				<TextBox Text="{Binding PasswordSQL, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" Width="150"/>
+			<StackPanel>
+				<Label Content="Password:" />
+				<TextBox Text="{Binding PasswordSQL, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" />
 			</StackPanel>
-			<StackPanel Orientation="Horizontal">
-				<Label Content="Database:" Margin="10 0"/>
-				<TextBox Text="{Binding SelectedSQLDatabase, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" Width="150" 
-						
-						 />
-			</StackPanel>
-			<StackPanel Orientation="Horizontal">
-				<Label Content="Database:" Margin="10 0"/>
+			<StackPanel>
+				<Label Content="Database:" />
 				<ComboBox 
 					ItemsSource="{Binding SqlDatabases}"
 					IsEnabled="{Binding IsComboBoxEnabled}"
+					SelectedItem="{Binding SelectedSQLDatabase}"
 					Width="150" />
 			</StackPanel>
 
@@ -103,17 +102,6 @@
 				<Button Margin="5 0 5 0" Width="60" Content="Extract" Command="{Binding ExtractData_Command}" />
 			</StackPanel>
 			
-			<!--Δεν θα χρησιμοποιήσω τα tables τελικά-->
-			<!--<ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Height="150">
-				<ItemsControl ItemsSource="{Binding DatabaseCheckboxList}">
-					<ItemsControl.ItemsPanel>
-						<ItemsPanelTemplate>
-							<StackPanel Orientation="Vertical" />
-						</ItemsPanelTemplate>
-					</ItemsControl.ItemsPanel>
-				</ItemsControl>
-			</ScrollViewer>-->
-
 		</WrapPanel>
 		<StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left">
 			<Label Width="40" Content="Status: " />

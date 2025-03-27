@@ -31,9 +31,5 @@ namespace SQL_Export
 			this.DataContext = vm;
 		}
 
-		private void TextBox_SourceUpdated(object sender, DataTransferEventArgs e)
-		{
-
-		}
 	}
 }

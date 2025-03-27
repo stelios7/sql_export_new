@@ -94,7 +94,7 @@ namespace SQL_Export.ViewModels
 				if (_connectionState != value)
 				{
 					_connectionState = value;
-					OnPropertyChanged();
+					OnPropertyChanged(nameof(ConnectionState));
 				}
 			}
 		}
@@ -192,7 +192,7 @@ namespace SQL_Export.ViewModels
 		private string GetSQLQueryString(int opt = 0)
 		{
 			var sb = new StringBuilder();
-			var begin_try = $@"BEGIN TRY
+			string query_create_index = $@"BEGIN TRY
 	CREATE INDEX idx_products_guid ON {SelectedSQLDatabase}.dbo.Products (guid);
 	CREATE INDEX idx_products_wh_prguid ON {SelectedSQLDatabase}.dbo.Products_WH (PrGuid);
 	CREATE INDEX idx_products_messureType ON {SelectedSQLDatabase}.dbo.Products (messureType);
@@ -202,7 +202,7 @@ namespace SQL_Export.ViewModels
 END TRY
 BEGIN CATCH
 END CATCH";
-			var mainQuery = $@"SELECT 
+			string query_main_butcher = $@"SELECT 
 Products.des AS 'ΠΕΡΙΓΡΑΦΗ',
 Products.category_des AS 'ΚΑΤΗΓΟΡΙΑ',
 MessureType.showdes 'ΜΟΝ ΜΕΤΡ',
@@ -223,37 +223,30 @@ JOIN [{SelectedSQLDatabase}].[dbo].[Products_WH] ON Products.guid = Products_WH.
 LEFT JOIN [{SelectedSQLDatabase}].[DBO].[MessureType] ON Products.messureType = MessureType.id
 LEFT JOIN [{SelectedSQLDatabase}].[DBO].[Products_Barcodes] ON Products.guid = Products_Barcodes.prguid 
 LEFT JOIN [{SelectedSQLDatabase}].[dbo].[ScaleTeams] ON [{SelectedSQLDatabase}].[dbo].[Products_WH].[scaleTeamId] = [{SelectedSQLDatabase}].[dbo].[ScaleTeams].team_zig_id;";
-			sb.AppendLine(begin_try);
-			sb.AppendLine(mainQuery);
-			var queryDefault = sb.ToString();
-			var queryMarket = $@"BEGIN TRY
-	CREATE INDEX idx_products_guid ON {SelectedSQLDatabase}.dbo.Products (guid);
-	CREATE INDEX idx_products_wh_prguid ON {SelectedSQLDatabase}.dbo.Products_WH (PrGuid);
-	CREATE INDEX idx_products_messureType ON {SelectedSQLDatabase}.dbo.Products (messureType);
-	CREATE INDEX idx_products_barcodes_prguid ON {SelectedSQLDatabase}.dbo.Products_Barcodes (prguid);
-	CREATE INDEX idx_products_wh_scaleTeamId ON {SelectedSQLDatabase}.dbo.Products_WH (scaleTeamId);
-	CREATE INDEX idx_scaleteams_team_zig_id ON {SelectedSQLDatabase}.dbo.ScaleTeams (team_zig_id);
-END TRY
-BEGIN CATCH
-END CATCH
-
-SELECT 
-Products.des AS 'ΠΕΡΙΓΡΑΦΗ',
-Products.category_des AS 'ΚΑΤΗΓΟΡΙΑ',
-Products.category_des2 AS 'ΚΑΤΗΓΟΡΙΑ 2',
-MessureType.showdes 'ΜΟΝ ΜΕΤΡ',
-PRODUCTS_WH.price1 AS 'ΤΙΜΗ', 
-PRODUCTS_WH.fpa AS 'ΦΠΑ',
-products_wh.qty AS 'ΠΟΣΟΤΗΤΑ',
-ISNULL(products_barcodes.barcode, ''),
-Products.id_external AS 'PLU'
-FROM {SelectedSQLDatabase}.[dbo].[Products]
-JOIN {SelectedSQLDatabase}.[dbo].[Products_WH] ON Products.guid = Products_WH.PrGuid
-LEFT JOIN {SelectedSQLDatabase}.[DBO].[MessureType] ON Products.messureType = MessureType.id
-LEFT JOIN {SelectedSQLDatabase}.[DBO].[Products_Barcodes] ON Products.guid = Products_Barcodes.prguid
-LEFT JOIN {SelectedSQLDatabase}.[dbo].[ScaleTeams] ON {SelectedSQLDatabase}.[dbo].[Products_WH].[scaleTeamId] = {SelectedSQLDatabase}.[dbo].[ScaleTeams].team_zig_id;";
-			return queryDefault;
+			sb.AppendLine(query_create_index);
+			sb.AppendLine(query_main_butcher);
+			File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "log.txt"), sb.ToString());
+			return sb.ToString();
 		}
+		private string GetSQLSoftwareInfo()
+		{
+			return @$"
+            SELECT [title]
+      ,[profession]
+      ,[street]
+      ,[region]
+      ,[city]
+      ,[zip]
+      ,[afm]
+      ,[doy]
+      ,[tel1]
+      ,[mobile]
+      ,[email]
+      ,[shopid]
+      ,[sn]
+            FROM [{SelectedSQLDatabase}].[dbo].[Info_Software]";
+
+        }
 
 		private string GetConnectionString()
 		{
@@ -348,28 +341,17 @@ LEFT JOIN {SelectedSQLDatabase}.[dbo].[ScaleTeams] ON {SelectedSQLDatabase}.[dbo
 						{
 							DataTable dataTable = new DataTable();
 
-							// Default query for products
-							var command = new SqlCommand(GetSQLQueryString(), connection);
-							var reader = command.ExecuteReader();
-							dataTable.Load(reader);
-							CreateWorksheet(dataTable, workbook, "extracted_products");
+							// CREATE WORKSHEETS
+							CreateWorksheet(connection, GetSQLQueryString(), workbook, "extracted_products");
+							CreateWorksheet(connection, GetSQLSoftwareInfo(), workbook, "information");
+							CreateWorksheet(connection, GetSQLPromitheftes(), workbook, "suppliers");
+							CreateWorksheet(connection, GetSQLCustomers(), workbook, "customers");
 
-							if (IsSupplier)
-							{
-								var querySupplier = $"SELECT [afm], [name] FROM {SelectedSQLDatabase}.[dbo].[Promitheuths]";
-								using (var newcom = new SqlCommand(querySupplier, connection))
-								{
-									using (var newreader = newcom.ExecuteReader())
-									{
-										var dt = new DataTable();
-										dt.Load(reader);
-										CreateWorksheet(dt, workbook, "suppliers");
-									}
-								}
-							}
+                            // SAVE WORKBOOK
+                            workbook.SaveAs(selectedFile);
 
-							workbook.SaveAs(selectedFile);
 							System.Windows.MessageBox.Show("File created");
+
 							Process.Start(new ProcessStartInfo
 							{
 								FileName = System.IO.Path.GetDirectoryName(selectedFile),
@@ -377,8 +359,6 @@ LEFT JOIN {SelectedSQLDatabase}.[dbo].[ScaleTeams] ON {SelectedSQLDatabase}.[dbo
 								Verb = "open"
 							});
 						}
-
-						connection.Close();
 					}
 				}
 				catch (Exception e)
@@ -389,9 +369,22 @@ LEFT JOIN {SelectedSQLDatabase}.[dbo].[ScaleTeams] ON {SelectedSQLDatabase}.[dbo
 			}
 		}
 
-		private void CreateWorksheet(DataTable dt, XLWorkbook wb, string sName)
+        private string GetSQLCustomers()
+        {
+			return $@"SELECT afm, bonus_points FROM [{SelectedSQLDatabase}].[dbo].[Customers]";
+        }
+
+        private string GetSQLPromitheftes()
+        {
+			return $@"SELECT afm FROM [{SelectedSQLDatabase}].[dbo].[Promitheuths]";
+        }
+
+        private void CreateWorksheet(SqlConnection conn, string sql, XLWorkbook wb, string sName)
 		{
-			var worksheet = wb.Worksheets.Add(sName);
+			DataTable dt = new DataTable();
+			SqlCommand command = new SqlCommand(sql, conn);
+			dt.Load(command.ExecuteReader());
+            var worksheet = wb.Worksheets.Add(sName);
 
 			// Write column headers
 			for (int j = 0; j < dt.Columns.Count; j++)
@@ -443,10 +436,9 @@ LEFT JOIN {SelectedSQLDatabase}.[dbo].[ScaleTeams] ON {SelectedSQLDatabase}.[dbo
 				}
 
 			}
-			catch (Exception)
+			catch (Exception ex)
 			{
-
-				throw;
+				Debug.Print(ex.Message);
 			}
 			//using (SqlConnection = new SqlConnection(connectionString))
 			//{
