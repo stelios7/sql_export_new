@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SQL_Export"
         mc:Ignorable="d"
-        Title="SQL Extract" Height="450" Width="350"
+        Title="SQL Extract" Height="350" Width="350"
 		ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
 		Icon="cells.ico"
 		>
@@ -60,10 +60,13 @@
 
 				<Style TargetType="TextBox">
 					<Setter Property="Width" Value="150" />
+					<Setter Property="VerticalContentAlignment" Value="Center" />
 				</Style>
 
 				<Style TargetType="Label">
-					<Setter Property="Width" Value="100" />
+					<Setter Property="Width" Value="100"/>
+					<Setter Property="Height" Value="auto" />
+					<Setter Property="Padding" Value="0 0 10 0" />
 					<Setter Property="HorizontalContentAlignment" Value="Right" />
 					<Setter Property="VerticalContentAlignment" Value="Center" />
 				</Style>
@@ -73,7 +76,7 @@
 				<TextBox Text="{Binding SelectedSqlInstance, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}"/>
 			</StackPanel>
 			<StackPanel>
-				<Label Content="Username:" />
+				<Label Content="Login:" />
 				<TextBox Text="{Binding LoginSQL, Mode=OneWayToSource, UpdateSourceTrigger=PropertyChanged}" />
 			</StackPanel>
 			<StackPanel>
@@ -89,22 +92,30 @@
 					Width="150" />
 			</StackPanel>
 
-			<StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="20, 0" Height="40">
+<!--EXTRA OPTIONS PANEL-->
+			<!--<StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="20, 0" Height="40">
 				<WrapPanel Orientation="Vertical" >
 					<CheckBox Margin="2" Content="Κρεοπωλείο" IsChecked="{Binding IsButcher, Mode=TwoWay}"/>
 					<CheckBox Margin="2" Content="Προμηθευτές" IsChecked="{Binding IsSupplier, Mode=TwoWay}"/>
 				</WrapPanel>
-			</StackPanel>
+			</StackPanel>-->
 
 			<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="20">
-				<Button Margin="5 0 5 0" Width="60" Content="Connect" Command="{Binding ConnectSQL_Command}" />
-				<Button Margin="5 0 5 0" Width="60" Content="Close" Command="{Binding DisConnectSQL_Command}" />
-				<Button Margin="5 0 5 0" Width="60" Content="Extract" Command="{Binding ExtractData_Command}" />
+				<StackPanel.Resources>
+					<Style TargetType="Button">
+						<Setter Property="Margin" Value="5 0 5 0" />
+						<Setter Property="Width" Value="80" />
+						<Setter Property="Cursor" Value="Hand" />
+					</Style>
+				</StackPanel.Resources>
+				<Button Content="Connect" Command="{Binding ConnectSQL_Command}" />
+				<Button Content="Disconnect" Command="{Binding DisconnectSQL_Command}" />
+				<Button Content="Extract" Command="{Binding ExtractData_Command}" />
 			</StackPanel>
 			
 		</WrapPanel>
 		<StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left">
-			<Label Width="40" Content="Status: " />
+			<Label Content="Status: " />
 			<Label Content="{Binding ConnectionState}" />
 		</StackPanel>
 			

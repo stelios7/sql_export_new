@@ -11,6 +11,8 @@ using System.Data;
 using System.Text;
 using System.IO;
 using System.Collections.Specialized;
+using Microsoft.SqlServer.Management.Common;
+using System.Linq.Expressions;
 
 namespace SQL_Export.ViewModels
 {
@@ -21,22 +23,13 @@ namespace SQL_Export.ViewModels
 		public RelayCommand DisconnectSQL_Command => new RelayCommand(execute => DisconnectSQL(), canExecute => CanDisconnect());
 		public RelayCommand ExtractData_Command => new RelayCommand(execute => ExtractData(), canExecute => CanExtract());
 		public RelayCommand ConnectSQL_Command => new RelayCommand(execute => ConnectSQL(), canExecute => CanConnect());
-		public RelayCommand DisConnectSQL_Command => new RelayCommand(execute => DisConnectSQL(), canExecute => CanDisConnect());
-
-		private bool CanDisConnect()
-		{
-			if (SqlConnection == null) return false;
-			return SqlConnection.State == System.Data.ConnectionState.Open;
-		}
-
-		private void DisConnectSQL()
-		{
-			SqlConnection.Close();
-			SqlDatabases.Clear();
-		}
-
 		public RelayCommand Checkbox_Command => new RelayCommand(execute => { }, canExecute => { return true; });
 
+        private bool CanDisconnect()
+        {
+            if (SqlConnection == null) return false;
+            return SqlConnection.State == System.Data.ConnectionState.Open;
+        }
 		private bool CanExtract()
 		{
 			if (SqlConnection == null) return false;
@@ -85,29 +78,14 @@ namespace SQL_Export.ViewModels
 		#region Properties
 
 
-		private string _connectionState;
-
-		public string ConnectionState
-		{
-			get { return _connectionState; }
-			private set { 
-				if (_connectionState != value)
-				{
-					_connectionState = value;
-					OnPropertyChanged(nameof(ConnectionState));
-				}
-			}
-		}
-
-
 		private SqlConnection _sqlConnection;
 		private string _selectedSqlInstance;
 		private string _selectedDatabase;
+		private string _connectionState;
 		private bool _isSupplierChecked;
 		private bool _isButcherChecked;
 		private string _password;
 		private string _loginSql;
-		private string _cnst;
 
 		public SqlConnection SqlConnection
 		{
@@ -137,13 +115,15 @@ namespace SQL_Export.ViewModels
 				//PopulateTables();
 			}
 		}
-		public string ConnectionStatus
+		public string ConnectionState
 		{
-			get { return _cnst; }
-			set
-			{
-				_cnst = value;
-				OnPropertyChanged();
+			get { return _connectionState; }
+			private set { 
+				if (_connectionState != value)
+				{
+					_connectionState = value;
+					OnPropertyChanged(nameof(ConnectionState));
+				}
 			}
 		}
 		public string PasswordSQL
@@ -203,48 +183,87 @@ END TRY
 BEGIN CATCH
 END CATCH";
 			string query_main_butcher = $@"SELECT 
-Products.des AS 'ΠΕΡΙΓΡΑΦΗ',
-Products.category_des AS 'ΚΑΤΗΓΟΡΙΑ',
-MessureType.showdes 'ΜΟΝ ΜΕΤΡ',
-PRODUCTS_WH.price1 AS 'ΤΙΜΗ', 
-PRODUCTS_WH.fpa AS 'ΦΠΑ',
-products_wh.qty AS 'ΠΟΣΟΤΗΤΑ',
-ISNULL(Products_Barcodes.barcode,'') as 'Barcode',
-ISNULL(LEFT(Products_Barcodes.barcode,7),
-CONCAT('21',RIGHT(CONCAT('00000', id_external),5))) AS 'Barcode',
-ISNULL(Products.category_des2, '') AS 'ΧΩΡΑ',
-ISNULL(ScaleTeams.team_name, '') AS 'ΖΥΓΑΡΙΑ ΟΝΟΜΑ',
-ISNULL(ScaleTeams.team_zig_id, '') AS 'ΖΥΓΑΡΙΑ id',
-RIGHT(CONCAT('00000', Products.id_external), 5) AS 'PLU',
-Products.countryImpName,
-Products.countryFeedName
-FROM [{SelectedSQLDatabase}].[dbo].[Products]
-JOIN [{SelectedSQLDatabase}].[dbo].[Products_WH] ON Products.guid = Products_WH.PrGuid
-LEFT JOIN [{SelectedSQLDatabase}].[DBO].[MessureType] ON Products.messureType = MessureType.id
-LEFT JOIN [{SelectedSQLDatabase}].[DBO].[Products_Barcodes] ON Products.guid = Products_Barcodes.prguid 
-LEFT JOIN [{SelectedSQLDatabase}].[dbo].[ScaleTeams] ON [{SelectedSQLDatabase}].[dbo].[Products_WH].[scaleTeamId] = [{SelectedSQLDatabase}].[dbo].[ScaleTeams].team_zig_id;";
+pr.des AS 'ΠΕΡΙΓΡΑΦΗ',
+pr.category_des AS 'ΚΑΤΗΓΟΡΙΑ',
+ISNULL(pr.category_des2, '') AS 'ΥΠΟΚΑΤΗΓΟΡΙΑ',
+CASE
+	WHEN mt.showdes = 'TEM' THEN 'ΤΕΜ'
+	WHEN mt.showdes = 'Kg' THEN 'ΚΙΛ'
+	ELSE mt.showdes
+END  AS 'ΜΟΝ ΜΕΤΡ',
+pw.price1 AS 'ΤΙΜΗ', 
+pw.fpa AS 'ΦΠΑ',
+ISNULL(pb.barcode,'') as 'ΚΩΔΙΚΟΣ',
+ISNULL(LEFT(pb.barcode,7),
+CONCAT('21',RIGHT(CONCAT('00000', id_external),5))) AS 'ΚΩΔΙΚΟΣ ΖΥΓ',
+ISNULL(st.team_name, '') AS 'ΖΥΓΑΡΙΑ ΟΝΟΜΑ',
+ISNULL(st.team_zig_id, '') AS 'ΖΥΓΑΡΙΑ id',
+RIGHT(CONCAT('00000', pr.id_external), 5) AS 'PLU',
+pr.countryImpName as 'ΧΩΡΑ ΓΕΝΝΗΣΗΣ',
+pr.countryFeedName AS 'ΧΩΡΑ ΕΚΤΡΟΦΗΣ',
+pw.qty AS 'ΠΟΣΟΤΗΤΑ'
+FROM [dbo].[Products] pr
+JOIN [dbo].[Products_WH] pw ON pr.guid = pw.PrGuid
+LEFT JOIN [DBO].[MessureType] mt ON pr.messureType = mt.id
+LEFT JOIN [DBO].[Products_Barcodes] pb ON pr.guid = pb.prguid 
+LEFT JOIN [dbo].[ScaleTeams] st ON pw.[scaleTeamId] = st.team_zig_id
+order by pr.des";
 			sb.AppendLine(query_create_index);
 			sb.AppendLine(query_main_butcher);
 			File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "log.txt"), sb.ToString());
 			return sb.ToString();
 		}
-		private string GetSQLSoftwareInfo()
+
+        private string GetSQLCustomers()
+        {
+            return $@"SELECT 
+	afm AS 'ΑΦΜ', 
+	CASE phone_1
+		WHEN '1' then ''
+		ELSE phone_1
+	END AS 'ΤΗΛΕΦΩΝΟ', 
+	ISNULL(email, '') as 'EMAIL',
+	creditMoney AS 'ΥΠΟΛΟΙΠΟ',
+	bonus_points AS 'ΠΟΝΤΟΙ'
+	FROM [dbo].[Customers]";
+        }
+
+        private string GetSQLPromitheftes()
+        {
+            return $@"SELECT afm AS 'ΑΦΜ' FROM [dbo].[Promitheuths]";
+        }
+
+		private string GetSQL_Timokatalogoi()
+		{
+			return $@"SELECT       
+	dbo.Customers.afm as 'ΑΦΜ', 
+	CONCAT('21',RIGHT(CONCAT('00000', id_external),5)) AS 'ΚΩΔΙΚΟΣ ΖΥΓ',
+	dbo.Price_PriceList.priceXondriki AS 'ΤΙΜΗ ΤΙΜΟΚΑΤΑΛΟΓΟΥ'
+FROM            dbo.Customers INNER JOIN
+                         dbo.PriceList ON dbo.Customers.priceList = dbo.PriceList.listGuid INNER JOIN
+                         dbo.Price_PriceList ON dbo.PriceList.listGuid = dbo.Price_PriceList.listguid INNER JOIN
+                         dbo.Products ON dbo.Price_PriceList.prguid = dbo.Products.guid INNER JOIN
+                         dbo.Products_WH ON dbo.Products.guid = dbo.Products_WH.PrGuid
+						 order by afm";
+		}
+
+        private string GetSQLSoftwareInfo()
 		{
 			return @$"
-            SELECT [title]
-      ,[profession]
-      ,[street]
-      ,[region]
-      ,[city]
-      ,[zip]
-      ,[afm]
-      ,[doy]
-      ,[tel1]
-      ,[mobile]
-      ,[email]
-      ,[shopid]
-      ,[sn]
-            FROM [{SelectedSQLDatabase}].[dbo].[Info_Software]";
+            SELECT [title] as 'ΕΠΩΝΥΜΙΑ'
+      ,[profession] AS 'ΕΠΑΓΓΕΛΜΑ' 
+      ,[street] AS 'ΔΙΕΥΘΥΝΣΗ'
+      ,[region] AS 'ΠΕΡΙΟΧΗ'
+      ,[city] AS 'ΠΟΛΗ'
+      ,[zip] AS 'ΤΚ'
+      ,[afm] AS	'ΑΦΜ'
+      ,[doy] AS 'ΔΟΥ'
+      ,[tel1] AS 'ΤΗΛΕΦΩΝΟ'
+      ,[mobile] AS 'ΚΙΝΗΤΟ'
+      ,[email] AS 'EMAIL'
+      ,[shopid] AS 'ΚΩΔΙΚΟΣ ΚΑΤΑΣΤΗΜΑΤΟΣ'
+      ,[sn] AS 'ΣΕΙΡΙΑΚΟ'
+            FROM [dbo].[Info_Software]";
 
         }
 
@@ -262,121 +281,62 @@ LEFT JOIN [{SelectedSQLDatabase}].[dbo].[ScaleTeams] ON [{SelectedSQLDatabase}].
 			return sb.ToString();
 		}
 
-		private void PopulateTables()
-		{
-			if (DatabaseCheckboxList.Count > 0)
-			{
-				DatabaseCheckboxList.Clear();
-			}
-
-			string connectionString = GetConnectionString();
-			string query = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME;";
-
-			using (SqlConnection connection = new SqlConnection(connectionString))
-			{
-				connection.Open();
-
-				using (SqlCommand command = new SqlCommand(query, connection))
-				using (SqlDataReader reader = command.ExecuteReader())
-				{
-					while (reader.Read())
-					{
-						DatabaseCheckboxList.Add(new System.Windows.Controls.CheckBox
-						{
-							Content = reader["TABLE_NAME"].ToString(),
-							IsChecked = false,
-							Margin = new Thickness(2)
-						});
-					}
-					SqlConnection.Close();
-				}
-			}
-		}
-
-		private bool CanDisconnect()
-		{
-			if (SqlConnection == null) return false;
-
-			return SqlConnection.State == System.Data.ConnectionState.Open;
-		}
-
-		private void DisconnectSQL()
-		{
-			SqlConnection.Close();
-			ConnectionStatus = "Disconnected";
-			SqlDatabases.Clear();
-		}
-
 		private void ExtractData()
 		{
-			// FolderBrowserDialog to choose destination
-			var ofd = new SaveFileDialog()
+			var fbd = new FolderBrowserDialog
 			{
-				Title = "Αποθήκευση αρχείου...",
-				Filter = GetFileFilters()
+				Description = "Επιλογή φακέλου...",
+				ShowNewFolderButton = true
 			};
 
-
-			if (ofd.ShowDialog() == DialogResult.OK)
+			if (fbd.ShowDialog() == DialogResult.OK)
 			{
-				string selectedFile = ofd.FileName;
+				string selectedFolder = fbd.SelectedPath;
 
 				try
 				{
-					using (SqlConnection connection = new SqlConnection(GetConnectionString()) { })
+					using (SqlConnection connection = new SqlConnection(GetConnectionString()))
 					{
 						connection.Open();
+						CreateWorkbook(connection, GetSQLQueryString(), selectedFolder, "products");
 
-						FileInfo newFile = new FileInfo(selectedFile);
+						// TODO: Create SQL Query for duplicates opos ta thelei o Alex
+						//CreateWorkbook(connection, GetSQL_Duplicates(), selectedFolder, "diplotipa");
+                        CreateWorkbook(connection, GetSQLCustomers(), selectedFolder, "customers");
+						CreateWorkbook(connection, GetSQLPromitheftes(), selectedFolder, "suppliers");
+						CreateWorkbook(connection, GetSQLSoftwareInfo(), selectedFolder, "information");
+						CreateWorkbook(connection, GetSQL_Timokatalogoi(), selectedFolder, "timokatalogoi");
+                    }
 
-						// Αν υπάρχει το αρχείο τότε το διαγράφω.
-						if (newFile.Exists)
-						{
-							newFile.Delete();
-							newFile = new FileInfo(selectedFile);
-						}
+					System.Windows.MessageBox.Show("Files created.");
 
-						// Ανοίγω καινούργιο Workbook
-						using (var workbook = new XLWorkbook())
-						{
-							DataTable dataTable = new DataTable();
-
-							// CREATE WORKSHEETS
-							CreateWorksheet(connection, GetSQLQueryString(), workbook, "extracted_products");
-							CreateWorksheet(connection, GetSQLSoftwareInfo(), workbook, "information");
-							CreateWorksheet(connection, GetSQLPromitheftes(), workbook, "suppliers");
-							CreateWorksheet(connection, GetSQLCustomers(), workbook, "customers");
-
-                            // SAVE WORKBOOK
-                            workbook.SaveAs(selectedFile);
-
-							System.Windows.MessageBox.Show("File created");
-
-							Process.Start(new ProcessStartInfo
-							{
-								FileName = System.IO.Path.GetDirectoryName(selectedFile),
-								UseShellExecute = true,
-								Verb = "open"
-							});
-						}
-					}
-				}
-				catch (Exception e)
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = System.IO.Path.GetDirectoryName(selectedFolder),
+                        UseShellExecute = true,
+                        Verb = "open"
+                    });
+                }
+				catch (Exception ex)
 				{
-					System.Windows.MessageBox.Show($"Error {e.Message}");
+					Debug.Print(ex.Message);
 				}
-
 			}
 		}
 
-        private string GetSQLCustomers()
+        private void CreateWorkbook(SqlConnection connection, string query, string directory, string type)
         {
-			return $@"SELECT afm, bonus_points FROM [{SelectedSQLDatabase}].[dbo].[Customers]";
-        }
+            using (var workbook = new XLWorkbook())
+            {
+                DataTable dataTable = new DataTable();
 
-        private string GetSQLPromitheftes()
-        {
-			return $@"SELECT afm FROM [{SelectedSQLDatabase}].[dbo].[Promitheuths]";
+                // CREATE WORKSHEETS
+                CreateWorksheet(connection, query, workbook, type);
+
+                // SAVE WORKBOOK
+				var wb_filepath = Path.Combine(directory, type + ".xlsx");
+                workbook.SaveAs(wb_filepath);
+            }
         }
 
         private void CreateWorksheet(SqlConnection conn, string sql, XLWorkbook wb, string sName)
@@ -401,14 +361,21 @@ LEFT JOIN [{SelectedSQLDatabase}].[dbo].[ScaleTeams] ON [{SelectedSQLDatabase}].
 					//Debug.Print($@"Row {i} Column {j}");
 				}
 			}
-		}
 
-		private void ConnectSQL()
+			// Adjust column width to fit content
+			worksheet.Columns().AdjustToContents();
+		}
+        private void DisconnectSQL()
+        {
+			//System.Windows.MessageBox.Show("Disconnect");
+            SqlConnection.Close();
+			SqlConnection.Dispose();
+            SqlDatabases.Clear();
+        }
+
+        private void ConnectSQL()
 		{
-			// Update UI
-			ConnectionStatus = "Connecting...";
-			string connectionString = @$"Server={Environment.MachineName}\{SelectedSqlInstance.Replace(@".\", "")};User ID={LoginSQL};Password={PasswordSQL};TrustServerCertificate=True;";
-			//System.Windows.MessageBox.Show(connectionString);
+			string connectionString = @$"Server={Environment.MachineName}\{SelectedSqlInstance.Replace(@".\", "")};User ID={LoginSQL};Password={PasswordSQL};TrustServerCertificate=True;Connect Timeout=5;";
 
 			try
 			{
@@ -430,8 +397,6 @@ LEFT JOIN [{SelectedSQLDatabase}].[dbo].[ScaleTeams] ON [{SelectedSQLDatabase}].
 							Debug.WriteLine(db);
 							SqlDatabases.Add(db);
 						}
-
-						//OnPropertyChanged("IsComboBoxEnabled");
 					}
 				}
 
@@ -440,100 +405,19 @@ LEFT JOIN [{SelectedSQLDatabase}].[dbo].[ScaleTeams] ON [{SelectedSQLDatabase}].
 			{
 				Debug.Print(ex.Message);
 			}
-			//using (SqlConnection = new SqlConnection(connectionString))
-			//{
-			//	SqlConnection.Open();
 
-			//	using (SqlCommand command = new SqlCommand()
-				
-			//}
-
-			//System.Windows.Forms.MessageBox.Show(SqlConnection.State.ToString());
-
-
-			#region OLD FUNCTIONALITY
-
-			//SqlDatabases.Clear();
-
-			//try
-			//{
-			//	string connectionString = @$"Server={Environment.MachineName}\{SelectedSqlInstance};User ID={LoginSQL};Password={PasswordSQL};TrustServerCertificate=True;";
-			//	SqlConnection = new SqlConnection(connectionString);
-
-			//	// Create and open a connection to the SQL Server instance
-			//	SqlConnection.Open();
-
-			//	ConnectionStatus = "Connected";
-
-			//	// SQL query to list all databases in the SQL Server instance
-			//	string query = "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE'";
-
-			//	// Create a SqlCommand to execute the query
-			//	using (SqlCommand command = new SqlCommand(query, SqlConnection))
-			//	{
-			//		// Execute the command and get a SqlDataReader to read the results
-			//		using (SqlDataReader reader = command.ExecuteReader())
-			//		{
-			//			Debug.WriteLine("Available Databases:");
-
-			//			// Loop through the results and print the database names
-			//			while (reader.Read())
-			//			{
-			//				var db = (string)reader["name"];
-			//				Debug.WriteLine(db);
-			//				SqlDatabases.Add(db);
-			//			}
-			//		}
-			//	}
-			//}
-			//catch (Exception ex)
-			//{
-			//	System.Windows.MessageBox.Show($"An error occurred: {ex.Message}");
-			//	ConnectionStatus = "Disconnected";
-			//}
-
-			#endregion
 		}
 
 		private bool CanConnect()
 		{
-			#region OLD CONNECTION
-
-			//var b = LoginSQL.Length > 0 && PasswordSQL.Length > 0 && SelectedSqlInstance.Length > 0;
-
-			////if (SqlConnection == null) return false;
-
-			//if (SqlConnection == null)
-			//{
-			//	return b;
-			//}
-
-			//return b && SqlConnection.State == ConnectionState.Closed;
-
-			#endregion
-
-			//var result = LoginSQL.Length > 0 && PasswordSQL.Length > 0 && SelectedSqlInstance.Length > 0 && SelectedSQLDatabase.Length > 0;
 			var result = LoginSQL.Length > 0 && PasswordSQL.Length > 0 && SelectedSqlInstance.Length > 0;
 			if (SqlConnection == null) return result;
+			if (SqlConnection.State == System.Data.ConnectionState.Open) return false;
 
-			var b = SqlConnection.State == System.Data.ConnectionState.Closed;
+            var b = SqlConnection.State == System.Data.ConnectionState.Closed;
 			var c = SqlConnection.State == System.Data.ConnectionState.Broken;
 
 			return result & (b || c);
-		}
-
-		private int GetTotalQueries()
-		{
-			if (IsSupplier && IsButcher)
-			{
-				return 2;
-			}
-
-			if (IsSupplier)
-			{
-				return 1;
-			}
-			return 1;
 		}
 
 		#endregion
@@ -546,14 +430,19 @@ LEFT JOIN [{SelectedSQLDatabase}].[dbo].[ScaleTeams] ON [{SelectedSQLDatabase}].
 
 		private void LoadTimers()
 		{
-			System.Timers.Timer _timer = new System.Timers.Timer(500);
-			_timer.Elapsed += (sender, args) => CheckConnectionState();
-			_timer.Start();
+			DispatcherTimer t = new DispatcherTimer();
+			t.Interval = TimeSpan.FromMilliseconds(100);
+			t.Tick += new EventHandler((o, e) => CheckConnectionState());
+			t.Start();
 		}
 
 		private void CheckConnectionState()
 		{
-			if (SqlConnection == null) return;
+			if (SqlConnection == null)
+			{
+				ConnectionState = "None";
+				return;
+			}
 			ConnectionState = SqlConnection.State.ToString();
 		}
 
@@ -561,43 +450,7 @@ LEFT JOIN [{SelectedSQLDatabase}].[dbo].[ScaleTeams] ON [{SelectedSQLDatabase}].
 		{
 			SqlDatabases = new ObservableCollection<string>();
 			SqlDatabases.CollectionChanged += SqlDatabases_CollectionChanged;
-			// Skip SQL Instances γιατί αργούσαν πολύ να φορτώσουν.
-			// await LoadInstances();
 		}
 
-		private async Task LoadInstances()
-		{
-			SqlInstances = new ObservableCollection<string>();
-			SqlDatabases = new ObservableCollection<string>();
-			DatabaseCheckboxList = new ObservableCollection<System.Windows.Controls.CheckBox>();
-
-			try
-			{
-				SqlDataSourceEnumerator instance = SqlDataSourceEnumerator.Instance;
-				DataTable table = new DataTable();
-				while (table.Rows.Count == 0)
-				{
-					await Task.Run(() =>
-					{
-						// System.Windows.MessageBox.Show("Begin GetDataSources");
-						ConnectionStatus = "Loading...";
-						table = instance.GetDataSources();
-						Debug.Print($"{table.Rows.Count}");
-					});
-				}
-
-				// System.Windows.MessageBox.Show($"Sources loaded {table.Rows.Count}");
-				ConnectionStatus = "Ready";
-				string servername = Environment.MachineName;
-				foreach (DataRow row in table.Rows)
-				{
-					await Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
-					{
-						SqlInstances.Add(row["InstanceName"].ToString());
-					}));
-				}
-			}
-			catch (Exception ex) { }
-		}
 	}
 }
