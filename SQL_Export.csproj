@@ -2,15 +2,16 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+  
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-	  <PublishSingleFile>true</PublishSingleFile>
-	  <SelfContained>true</SelfContained>
-	  <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+  <TargetFramework>net6.0-windows</TargetFramework>
+  <TargetFrameworks>net6.0-windows;net7.0-windows</TargetFrameworks>
+
+	  
 	  <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-	  <PublishTrimmed>false</PublishTrimmed>
+	 
 	  <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
 	  <ApplicationIcon>cells.ico</ApplicationIcon>
 	  <!--<IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>-->
@@ -18,12 +19,6 @@
 
   <ItemGroup>
     <None Remove="cells.ico" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="cells.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
 
   <ItemGroup>

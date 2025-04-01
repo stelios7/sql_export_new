@@ -13,6 +13,8 @@ using System.IO;
 using System.Collections.Specialized;
 using Microsoft.SqlServer.Management.Common;
 using System.Linq.Expressions;
+using DocumentFormat.OpenXml.InkML;
+using System.Security.Principal;
 
 namespace SQL_Export.ViewModels
 {
@@ -264,7 +266,6 @@ FROM            dbo.Customers INNER JOIN
       ,[shopid] AS 'ΚΩΔΙΚΟΣ ΚΑΤΑΣΤΗΜΑΤΟΣ'
       ,[sn] AS 'ΣΕΙΡΙΑΚΟ'
             FROM [dbo].[Info_Software]";
-
         }
 
 		private string GetConnectionString()
@@ -344,12 +345,91 @@ FROM            dbo.Customers INNER JOIN
 			DataTable dt = new DataTable();
 			SqlCommand command = new SqlCommand(sql, conn);
 			dt.Load(command.ExecuteReader());
-            var worksheet = wb.Worksheets.Add(sName);
+
+			if (sName == "products")
+			{
+				DataTable d2 = new DataTable();
+
+                // Step 1: Identify one barcode per 'des' as the primary barcode
+                string query_step1 = $@"WITH CTE AS (
+    SELECT 
+        pr.des, 
+        pb.barcode,
+        ROW_NUMBER() OVER (PARTITION BY pr.des, pw.price1 ORDER BY (SELECT NULL)) AS rn
+    FROM [dbo].[Products] pr
+JOIN [dbo].[Products_WH] pw ON pr.guid = pw.PrGuid
+LEFT JOIN [DBO].[MessureType] mt ON pr.messureType = mt.id
+LEFT JOIN [DBO].[Products_Barcodes] pb ON pr.guid = pb.prguid 
+LEFT JOIN [dbo].[ScaleTeams] st ON pw.[scaleTeamId] = st.team_zig_id
+)
+SELECT des, barcode AS PrimaryBarcode
+INTO #PrimaryBarcodes
+FROM CTE
+WHERE rn = 1;";
+
+                // Step 2: Create a mapping table with the primary barcode and the rest barcodes
+                string query_step2 = $@"WITH CTE AS (
+    SELECT 
+        pr.des, 
+        pb.barcode,
+		pw.price1,
+        ROW_NUMBER() OVER (PARTITION BY pr.des ORDER BY pb.barcode) AS rn
+    FROM [dbo].[Products] pr
+JOIN [dbo].[Products_WH] pw ON pr.guid = pw.PrGuid
+LEFT JOIN [DBO].[MessureType] mt ON pr.messureType = mt.id
+LEFT JOIN [DBO].[Products_Barcodes] pb ON pr.guid = pb.prguid 
+LEFT JOIN [dbo].[ScaleTeams] st ON pw.[scaleTeamId] = st.team_zig_id
+)
+SELECT p.PrimaryBarcode, c.barcode AS AdditionalBarcode
+FROM CTE c
+JOIN #PrimaryBarcodes p ON c.des = p.des
+WHERE c.rn > 1;";
+
+				string drop_temp_table_query = "DROP TABLE #PrimaryBarcodes;";
+
+				using (SqlCommand cmd = conn.CreateCommand())
+				{
+					cmd.CommandText = query_step1;
+					cmd.ExecuteNonQuery();
+
+					cmd.CommandText = query_step2;
+					d2.Load(cmd.ExecuteReader());
+
+					cmd.CommandText = drop_temp_table_query;
+                    cmd.ExecuteNonQuery();
+                }
+				//	// Run first query
+				//	SqlCommand cmd = new SqlCommand(query_step1, conn);
+				//cmd.ExecuteNonQuery();
+
+				//// Run second query
+				//cmd = new SqlCommand(query_step2, conn);
+    //            dt.Load(cmd.ExecuteReader());
+
+				//// Drop temp table
+    //            cmd = new SqlCommand(drop_temp_table_query, conn);
+				//cmd.ExecuteNonQuery();
+
+				var barcodesToRemove = d2.AsEnumerable()
+					.Select(row => row.Field<string>("AdditionalBarcode"))
+					.ToHashSet();
+				var rowsToDelete = dt.AsEnumerable()
+					.Where(row => barcodesToRemove.Contains(row.Field<string>("ΚΩΔΙΚΟΣ ΖΥΓ")))
+					.ToList();
+
+				foreach (var row in rowsToDelete)
+				{
+					dt.Rows.Remove(row);
+				}
+            }
+
+                var worksheet = wb.Worksheets.Add(sName);
 
 			// Write column headers
 			for (int j = 0; j < dt.Columns.Count; j++)
 			{
-				worksheet.Cell(1, j + 1).Value = dt.Columns[j].ColumnName;
+				var c = dt.Columns[j].ColumnName;
+					worksheet.Cell(1, j + 1).Value = c;
 			}
 
 			// Write data rows
@@ -357,7 +437,7 @@ FROM            dbo.Customers INNER JOIN
 			{
 				for (int k = 0; k < dt.Columns.Count; k++)
 				{
-					worksheet.Cell(j + 2, k + 1).Value = dt.Rows[j][k].ToString();
+					worksheet.Cell(j + 2, k + 1).Value = dt.Rows[j][k].ToString().Replace(",",".");
 					//Debug.Print($@"Row {i} Column {j}");
 				}
 			}
