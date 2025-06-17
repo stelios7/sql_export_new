@@ -3,7 +3,6 @@ using Microsoft.Data.SqlClient;
 using System.Windows.Threading;
 using System.Windows.Forms;
 using System.Diagnostics;
-using Microsoft.Data.Sql;
 using ClosedXML.Excel;
 using System.Windows;
 using SQL_Export.Src;
@@ -11,41 +10,76 @@ using System.Data;
 using System.Text;
 using System.IO;
 using System.Collections.Specialized;
-using Microsoft.SqlServer.Management.Common;
-using System.Linq.Expressions;
-using DocumentFormat.OpenXml.InkML;
-using System.Security.Principal;
-using DocumentFormat.OpenXml.Vml.Office;
 using System.IO.Compression;
+using System.Collections.Generic;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace SQL_Export.ViewModels
 {
     internal class MainWindowViewModel : BaseViewModel
     {
-        #region Declarations
+        #region DECLARATIONS
+
+        #region HANDLERS
+
+        // Event handler for when the collection changes
+        private void SqlDatabases_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            // Notify that IsComboBoxEnabled has changed whenever the collection is modified
+            OnPropertyChanged("IsComboBoxEnabled");
+        }
+
+        #endregion
+
+        #region RELAY COMMANDS
+
+        public RelayCommand RestoreDB_Command => new RelayCommand(execute => RestoreDatabase(SelectedSqlInstance, DatabaseToRestore, "C:\\Users\\Public\\Documents\\SQL_Export\\Backup.bak"), canExecute => CanRestoreDB());
+        private bool CanRestoreDB()
+        {
+            if (SqlConnection == null) return false;
+
+            return DatabaseToRestoreName.Length > 0 && File.Exists(DatabaseToRestore) && SqlConnection.State == System.Data.ConnectionState.Open;
+        }
+
+        public RelayCommand SelectLocalDatabase_command => new RelayCommand(execute => SelectLocalDatabase(), canExecute => true);
 
         public RelayCommand DisconnectSQL_Command => new RelayCommand(execute => DisconnectSQL(), canExecute => CanDisconnect());
-        public RelayCommand ExtractData_Command => new RelayCommand(execute => ExtractData(), canExecute => CanExtract());
-        public RelayCommand ConnectSQL_Command => new RelayCommand(execute => ConnectSQL(), canExecute => CanConnect());
-        public RelayCommand Checkbox_Command => new RelayCommand(execute => { }, canExecute => { return true; });
-
-        private List<string> ExcelFilesToZip = new List<string>();
-
         private bool CanDisconnect()
         {
             if (SqlConnection == null) return false;
             return SqlConnection.State == System.Data.ConnectionState.Open;
         }
+
+        public RelayCommand ExtractData_Command => new RelayCommand(execute => ExtractData(), canExecute => CanExtract());
         private bool CanExtract()
         {
             if (SqlConnection == null) return false;
             return SqlConnection.State == System.Data.ConnectionState.Open;
         }
 
+        public RelayCommand ConnectSQL_Command => new RelayCommand(execute => ConnectSQL(), canExecute => CanConnect());
+        private bool CanConnect()
+        {
+            var result = LoginSQL.Length > 0 && PasswordSQL.Length > 0 && SelectedSqlInstance.Length > 0;
+            if (SqlConnection == null) return result;
+            if (SqlConnection.State == System.Data.ConnectionState.Open) return false;
+
+            var b = SqlConnection.State == System.Data.ConnectionState.Closed;
+            var c = SqlConnection.State == System.Data.ConnectionState.Broken;
+
+            return result & (b || c);
+        }
+
+        public RelayCommand Checkbox_Command => new RelayCommand(execute => { }, canExecute => { return true; });
+
+        #endregion
+
+        private List<string> ExcelFilesToZip = new List<string>();
+        private ObservableCollection<string> _sqlDatabases;
         public ObservableCollection<System.Windows.Controls.CheckBox> DatabaseCheckboxList { get; set; }
         public ObservableCollection<string> SqlInstances { get; set; }
-
-        private ObservableCollection<string> _sqlDatabases;
         public ObservableCollection<string> SqlDatabases
         {
             get { return _sqlDatabases; }
@@ -70,19 +104,58 @@ namespace SQL_Export.ViewModels
             }
         }
 
-        // Event handler for when the collection changes
-        private void SqlDatabases_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        {
-            // Notify that IsComboBoxEnabled has changed whenever the collection is modified
-            OnPropertyChanged("IsComboBoxEnabled");
-        }
+        #region ENABLERS
 
         public bool IsComboBoxEnabled
         {
             get { return SqlDatabases != null && SqlDatabases.Count > 0; }
         }
 
-        #region Properties
+        #endregion
+
+        #region PROPERTIES
+
+        private string _connectionString;
+
+        public string ConnectionString
+        {
+            get { return _connectionString; }
+            set { _connectionString = value; }
+        }
+
+
+        public string DatabaseToRestoreName
+        {
+            get { return _databaseToRestoreName; }
+            set
+            {
+                _databaseToRestoreName = value;
+                OnPropertyChanged(nameof(DatabaseToRestoreName));
+            }
+        }
+        private string _databaseToRestoreName;
+
+        private string _databaseToRestore;
+        public string DatabaseToRestore
+        {
+            get { return _databaseToRestore; }
+            set
+            {
+                _databaseToRestore = value;
+                OnPropertyChanged(nameof(DatabaseToRestore));
+            }
+        }
+
+        private bool _isLocalDatabase = true;
+        public bool IsLocalDatabase
+        {
+            get { return _isLocalDatabase; }
+            set
+            {
+                _isLocalDatabase = value;
+                OnPropertyChanged(nameof(IsLocalDatabase));
+            }
+        }
 
 
         private SqlConnection _sqlConnection;
@@ -125,13 +198,10 @@ namespace SQL_Export.ViewModels
         public string ConnectionState
         {
             get { return _connectionState; }
-            private set
+            set
             {
-                if (_connectionState != value)
-                {
-                    _connectionState = value;
-                    OnPropertyChanged(nameof(ConnectionState));
-                }
+                _connectionState = value;
+                OnPropertyChanged(nameof(ConnectionState));
             }
         }
         public string PasswordSQL
@@ -177,176 +247,46 @@ namespace SQL_Export.ViewModels
 
         #region Functions
 
-        private string GetSQL_DuplicateBarcodes()
+        DispatcherTimer ConnectionStatusTimer;
+        private void LoadTimers()
         {
-            return $@"-- Step 1: Assign a primary barcode per 'des' with its corresponding price
-WITH RankedBarcodes AS (
-    SELECT 
-        des,
-        barcode,
-        price,
-        FIRST_VALUE(barcode) OVER (PARTITION BY des	ORDER BY barcode desc) AS PrimaryBarcode,
-        MIN(price) OVER (PARTITION BY des) AS PrimaryPrice  
-    FROM vw_ProductDetails
-),
--- Step 2: Find the smallest PrimaryBarcode for each duplicate AdditionalBarcode
-BarcodeAssignment AS (
-    SELECT 
-        barcode AS AdditionalBarcode,
-        MIN(PrimaryBarcode) AS AssignedPrimaryBarcode  -- Assign it to the smallest primary barcode
-    FROM RankedBarcodes
-    WHERE barcode <> PrimaryBarcode  -- Only consider additional barcodes
-    GROUP BY barcode
-)
--- Step 3: Get the final result with unique barcode assignments
-SELECT DISTINCT
-    BA.AssignedPrimaryBarcode AS PrimaryBarcode,    
-    RB.barcode AS AdditionalBarcode
-FROM RankedBarcodes RB
-JOIN BarcodeAssignment BA ON RB.barcode = BA.AdditionalBarcode
-WHERE RB.barcode <> RB.PrimaryBarcode  -- Exclude primary barcode itself
-AND RB.price = RB.PrimaryPrice        -- Exclude additional barcodes with the same price
-AND RB.PrimaryBarcode = BA.AssignedPrimaryBarcode  -- Ensure barcode is assigned to only one primary barcode;";
+            ConnectionStatusTimer = new DispatcherTimer();
+            ConnectionStatusTimer.Interval = TimeSpan.FromMilliseconds(100);
+            ConnectionStatusTimer.Tick += new EventHandler((o, e) => CheckConnectionState());
+            ConnectionStatusTimer.Start();
+            Logger.Info("Timers started.");
         }
 
-        private string GetSQL_DropView()
+        private void Start()
         {
-            return $@"-- Step 1: Drop the view
-SET ANSI_NULLS ON
-SET QUOTED_IDENTIFIER ON
+            SqlDatabases = new ObservableCollection<string>();
+            SqlDatabases.CollectionChanged += SqlDatabases_CollectionChanged;
 
--- Step 1: Drop the view if it exists
-IF OBJECT_ID('dbo.vw_ProductDetails', 'V') IS NOT NULL
-	DROP VIEW dbo.vw_ProductDetails;";
+            IsLocalDatabase = false;
         }
 
-        private string GetSQL_CreateView()
+        private void SelectLocalDatabase()
         {
-            return $@"-- Step 2: Create the view
-CREATE VIEW [dbo].[vw_ProductDetails] AS 
-SELECT 
-    pr.des, 
-    pr.category_des, 
-    pr.category_des2, 
-    pr.id_external, 
-    pr.countryImpName, 
-    pr.countryFeedName,
-    pw.price1 as price, 
-    pw.fpa,
-    mt.showdes,
-    pb.Barcode,
-    st.team_name, 
-    st.team_zig_id,
-	pw.qty
-FROM dbo.Products pr
-JOIN dbo.Products_WH pw ON pr.guid = pw.PrGuid
-LEFT JOIN dbo.MessureType mt ON pr.messureType = mt.id
-LEFT JOIN dbo.Products_Barcodes pb ON pr.guid = pb.prguid
-LEFT JOIN dbo.ScaleTeams st ON pw.scaleTeamId = st.team_zig_id
-WHERE LEN(pb.barcode) = 13;";
+            var ofd = new OpenFileDialog
+            {
+                Title = "Επιλογή αρχείου βάσης...",
+                Filter = "All Files|*.*"
+            };
+
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                DatabaseToRestore = ofd.FileName;
+            }
         }
 
-        private string GetSQL_CreateIndexes()
+        private void CheckConnectionState()
         {
-            return $@"BEGIN TRY
-	CREATE INDEX idx_products_guid ON dbo.Products (guid);
-	CREATE INDEX idx_products_wh_prguid ON dbo.Products_WH (PrGuid);
-	CREATE INDEX idx_products_messureType ON dbo.Products (messureType);
-	CREATE INDEX idx_products_barcodes_prguid ON dbo.Products_Barcodes (prguid);
-	CREATE INDEX idx_products_wh_scaleTeamId ON dbo.Products_WH (scaleTeamId);
-	CREATE INDEX idx_scaleteams_team_zig_id ON dbo.ScaleTeams (team_zig_id);
-END TRY
-BEGIN CATCH
-END CATCH";
-        }
-
-        private string GetSQLQueryString(int opt = 0)
-        {
-            var sb = new StringBuilder();
-            string query_main_butcher = $@"SELECT 
-des AS 'ΠΕΡΙΓΡΑΦΗ',
-category_des AS 'ΚΑΤΗΓΟΡΙΑ',
-ISNULL(category_des2, '') AS 'ΥΠΟΚΑΤΗΓΟΡΙΑ',
-CASE
-	WHEN showdes = 'TEM' THEN 'ΤΕΜ'
-	WHEN showdes = 'Kg' THEN 'ΚΙΛ'
-	ELSE showdes
-END  AS 'ΜΟΝ ΜΕΤΡ',
-price AS 'ΤΙΜΗ', 
-fpa AS 'ΦΠΑ',
-ISNULL(barcode,'') as 'ΚΩΔΙΚΟΣ',
-ISNULL(LEFT(barcode,7),
-CONCAT('21',RIGHT(CONCAT('00000', id_external),5))) AS 'ΚΩΔΙΚΟΣ ΖΥΓ',
-ISNULL(team_name, '') AS 'ΖΥΓΑΡΙΑ ΟΝΟΜΑ',
-ISNULL(team_zig_id, '') AS 'ΖΥΓΑΡΙΑ id',
-RIGHT(CONCAT('00000', id_external), 5) AS 'PLU',
-countryImpName as 'ΧΩΡΑ ΓΕΝΝΗΣΗΣ',
-countryFeedName AS 'ΧΩΡΑ ΕΚΤΡΟΦΗΣ',
-qty AS 'ΠΟΣΟΤΗΤΑ'
-FROM dbo.vw_ProductDetails
-order by des";
-            sb.AppendLine(query_main_butcher);
-            File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "log.txt"), sb.ToString());
-            return sb.ToString();
-        }
-
-        private string GetSQLCustomers()
-        {
-            return $@"SELECT 
-	afm AS 'ΑΦΜ', 
-	CASE phone_1
-		WHEN '1' then ''
-		ELSE phone_1
-	END AS 'ΤΗΛΕΦΩΝΟ', 
-	ISNULL(email, '') as 'EMAIL',
-	creditMoney AS 'ΥΠΟΛΟΙΠΟ',
-	bonus_points AS 'ΠΟΝΤΟΙ'
-	FROM [dbo].[Customers]";
-        }
-
-        private string GetSQLPromitheftes()
-        {
-            return $@"SELECT afm AS 'ΑΦΜ' FROM [dbo].[Promitheuths]";
-        }
-
-        private string GetSQL_Timokatalogoi()
-        {
-            return $@"SELECT       
-	dbo.Customers.afm as 'ΑΦΜ', 
-	CONCAT('21',RIGHT(CONCAT('00000', id_external),5)) AS 'ΚΩΔΙΚΟΣ ΖΥΓ',
-	dbo.Price_PriceList.priceXondriki AS 'ΤΙΜΗ ΤΙΜΟΚΑΤΑΛΟΓΟΥ'
-FROM            dbo.Customers INNER JOIN
-                         dbo.PriceList ON dbo.Customers.priceList = dbo.PriceList.listGuid INNER JOIN
-                         dbo.Price_PriceList ON dbo.PriceList.listGuid = dbo.Price_PriceList.listguid INNER JOIN
-                         dbo.Products ON dbo.Price_PriceList.prguid = dbo.Products.guid INNER JOIN
-                         dbo.Products_WH ON dbo.Products.guid = dbo.Products_WH.PrGuid
-						 order by afm";
-        }
-
-        private string GetSQLSoftwareInfo()
-        {
-            return @$"
-            SELECT [title] as 'ΕΠΩΝΥΜΙΑ'
-      ,[profession] AS 'ΕΠΑΓΓΕΛΜΑ' 
-      ,[street] AS 'ΔΙΕΥΘΥΝΣΗ'
-      ,[region] AS 'ΠΕΡΙΟΧΗ'
-      ,[city] AS 'ΠΟΛΗ'
-      ,[zip] AS 'ΤΚ'
-      ,[afm] AS	'ΑΦΜ'
-      ,[doy] AS 'ΔΟΥ'
-      ,[tel1] AS 'ΤΗΛΕΦΩΝΟ'
-      ,[mobile] AS 'ΚΙΝΗΤΟ'
-      ,[email] AS 'EMAIL'
-      ,[shopid] AS 'ΚΩΔΙΚΟΣ ΚΑΤΑΣΤΗΜΑΤΟΣ'
-      ,[sn] AS 'ΣΕΙΡΙΑΚΟ'
-            FROM [dbo].[Info_Software]";
-        }
-
-        private string GetConnectionString()
-        {
-            var srv = $@"{Environment.MachineName}\{SelectedSqlInstance}";
-            var db = $@"{SelectedSQLDatabase}";
-            return @$"Server={srv};Database={db};User ID={LoginSQL};Password={PasswordSQL};TrustServerCertificate=True;";
+            if (SqlConnection == null)
+            {
+                ConnectionState = "None";
+                return;
+            }
+            ConnectionState = SqlConnection.State.ToString();
         }
 
         private string GetFileFilters()
@@ -370,31 +310,44 @@ FROM            dbo.Customers INNER JOIN
 
                 try
                 {
-                    using (SqlConnection connection = new SqlConnection(GetConnectionString()))
+
+                    SqlConnection _conn = null;
+                    if (IsLocalDatabase)
+                    {
+                        SelectedSQLDatabase = DatabaseToRestoreName;
+                        var sqlInfo = new Tuple<string, string> (SelectedSqlInstance, DatabaseToRestoreName);
+                        _conn = new SqlConnection(SqlQueries.GetConnectionString(sqlInfo, LoginSQL, PasswordSQL));
+                    }
+                    else
+                    {
+                        var sqlInfo = new Tuple<string, string>(SelectedSqlInstance, SelectedSQLDatabase);
+                        _conn = new SqlConnection(SqlQueries.GetConnectionString(sqlInfo, LoginSQL, PasswordSQL));
+                    }
+                    using (SqlConnection connection = _conn)
                     {
                         connection.Open();
 
                         using (SqlCommand cmd = connection.CreateCommand())
                         {
                             // CREATE INDEXES
-                            cmd.CommandText = GetSQL_CreateIndexes();
+                            cmd.CommandText = SqlQueries.GetSQL_CreateIndexes();
                             cmd.ExecuteNonQuery();
 
                             // DROP VIEW IF IT EXISTS
-                            cmd.CommandText = GetSQL_DropView();
+                            cmd.CommandText = SqlQueries.GetSQL_DropView();
                             cmd.ExecuteNonQuery();
 
                             // CREATE VIEW AGAIN
-                            cmd.CommandText = GetSQL_CreateView();
+                            cmd.CommandText = SqlQueries.GetSQL_CreateView();
                             cmd.ExecuteNonQuery();
                         }
 
-                        CreateWorkbook(connection, GetSQLQueryString(), selectedFolder, "products");
-                        CreateWorkbook(connection, GetSQL_DuplicateBarcodes(), selectedFolder, "duplicates");
-                        CreateWorkbook(connection, GetSQLCustomers(), selectedFolder, "customers");
-                        CreateWorkbook(connection, GetSQLPromitheftes(), selectedFolder, "suppliers");
-                        CreateWorkbook(connection, GetSQLSoftwareInfo(), selectedFolder, "information");
-                        CreateWorkbook(connection, GetSQL_Timokatalogoi(), selectedFolder, "timokatalogoi");
+                        CreateWorkbook(connection, SqlQueries.GetSQLQueryString(), selectedFolder, "products");
+                        CreateWorkbook(connection, SqlQueries.GetSQL_DuplicateBarcodes(), selectedFolder, "duplicates");
+                        CreateWorkbook(connection, SqlQueries.GetSQLCustomers(), selectedFolder, "customers");
+                        CreateWorkbook(connection, SqlQueries.GetSQLPromitheftes(), selectedFolder, "suppliers");
+                        CreateWorkbook(connection, SqlQueries.GetSQLSoftwareInfo(), selectedFolder, "information");
+                        CreateWorkbook(connection, SqlQueries.GetSQL_Timokatalogoi(), selectedFolder, "timokatalogoi");
                     }
 
                     //ZipFiles(selectedFolder);
@@ -409,7 +362,8 @@ FROM            dbo.Customers INNER JOIN
                 }
                 catch (Exception ex)
                 {
-                    Debug.Print(ex.Message);
+                    System.Windows.MessageBox.Show("Error: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Logger.Error(ex.Message);
                 }
             }
         }
@@ -456,7 +410,7 @@ FROM            dbo.Customers INNER JOIN
 
                 using (SqlCommand cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = GetSQL_DuplicateBarcodes();
+                    cmd.CommandText = SqlQueries.GetSQL_DuplicateBarcodes();
                     d2.Load(cmd.ExecuteReader());
                 }
 
@@ -494,22 +448,153 @@ FROM            dbo.Customers INNER JOIN
             // Adjust column width to fit content
             worksheet.Columns().AdjustToContents();
         }
+
         private void DisconnectSQL()
         {
             //System.Windows.MessageBox.Show("Disconnect");
             SqlConnection.Close();
             SqlConnection.Dispose();
             SqlDatabases.Clear();
+
+            Logger.Info($"Disconnected from {SelectedSqlInstance}");
+        }
+
+        public void RestoreDatabase(string sqlInstance, string databaseName, string backupFilePath)
+        {
+            if (string.IsNullOrWhiteSpace(ConnectionString))
+            {
+                ConnectionString = SqlQueries.GetConnectionString(new Tuple<string, string>(sqlInstance, databaseName));
+            }
+
+            string v_databaseName = databaseName.Replace(".bak", "") + ".bak";
+            using (SqlConnection connection = new SqlConnection(ConnectionString))
+            {
+                connection.Open();
+
+                #region Step 1: Check if the database already exists and prompt user for confirmation
+
+                try
+                {
+                    string checkDbExistsQuery = $"SELECT database_id FROM sys.databases WHERE name = '{DatabaseToRestoreName}'";
+                    bool databaseExists = false;
+
+                    using (SqlCommand cmd = new SqlCommand(checkDbExistsQuery, connection))
+                    {
+                        databaseExists = cmd.ExecuteScalar() != null;
+                    }
+
+                    if (databaseExists)
+                    {
+                        var result = System.Windows.MessageBox.Show($"Η βάση '{DatabaseToRestoreName}' υπάρχει ήδη. Να γίνει διαγραφή και φόρτωση εκ νέου;", "Επιβεβαίωση", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                        if (result == MessageBoxResult.No)
+                        {
+                            // Abort the procedure
+                            return;
+                        }
+
+                        string dropDbQuery = $"DROP DATABASE {DatabaseToRestoreName}";
+                        using (SqlCommand cmd = new SqlCommand(dropDbQuery, connection))
+                        {
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex.Message);
+                }
+
+                #endregion
+
+                #region Step 2: Get Logical file names from backup
+                string logicalNamesQuery = $"RESTORE FILELISTONLY FROM DISK = '{databaseName}'";
+                string logicalDataName = "";
+                string logicalLogName = "";
+
+                try
+                {
+
+
+                    using (SqlCommand cmd = new SqlCommand(logicalNamesQuery, connection))
+                    {
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                if (reader["Type"].ToString() == "D")
+                                {
+                                    logicalDataName = reader["LogicalName"].ToString();
+                                }
+                                else if (reader["Type"].ToString() == "L")
+                                {
+                                    logicalLogName = reader["LogicalName"].ToString();
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Error retrieving logical file names: {ex.Message}");
+                }
+                #endregion
+
+                #region Step 3: Get the SQL Server data directory
+
+                string dataDirectoryQuery = "SELECT SERVERPROPERTY('InstanceDefaultDataPath') AS DataPath";
+                string dataDirectory = "";
+
+                using (SqlCommand cmd = new SqlCommand(dataDirectoryQuery, connection))
+                {
+                    dataDirectory = cmd.ExecuteScalar().ToString();
+                }
+                #endregion
+
+                #region Step 4: Restore the database
+
+                string restoreQuery = $@"
+RESTORE DATABASE {DatabaseToRestoreName}
+FROM DISK = '{DatabaseToRestore}'
+WITH MOVE '{logicalDataName}' TO '{dataDirectory}{logicalDataName + "_" + DatabaseToRestoreName}.mdf',
+MOVE '{logicalLogName}' TO '{dataDirectory}{logicalLogName + "_" + DatabaseToRestoreName}.ldf',
+REPLACE, RECOVERY;";
+
+                try
+                {
+                    using (SqlCommand restoreCmd = new SqlCommand(restoreQuery, connection))
+                    {
+                        restoreCmd.ExecuteNonQuery();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Error restoring database: {ex.Message}");
+                    System.Windows.MessageBox.Show($"Error restoring database: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                Debug.WriteLine($"Database {databaseName} restored successfully.");
+                ConnectionStatusTimer.Stop();
+                Task.Run(async () =>
+                {
+                    ConnectionState = $"Restored {DatabaseToRestoreName} successfully.";
+                    await Task.Delay(5000);
+                    ConnectionStatusTimer.Start();
+                });
+                #endregion
+            }
         }
 
         private void ConnectSQL()
         {
-            string connectionString = @$"Server={Environment.MachineName}\{SelectedSqlInstance.Replace(@".\", "")};User ID={LoginSQL};Password={PasswordSQL};TrustServerCertificate=True;Connect Timeout=5;";
+            ConnectionString = SqlQueries.GetConnectionString(SelectedSqlInstance, LoginSQL, PasswordSQL);
 
             try
             {
-                SqlConnection = new SqlConnection(connectionString);
+                SqlConnection = new SqlConnection(ConnectionString);
                 SqlConnection.Open();
+
+                Logger.Info($"SQL connected to Server: {SelectedSqlInstance}");
 
                 string query = "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE'";
                 using (SqlCommand command = new SqlCommand(query, SqlConnection))
@@ -532,54 +617,26 @@ FROM            dbo.Customers INNER JOIN
             }
             catch (Exception ex)
             {
-                Debug.Print(ex.Message);
+                var logLine = new StringBuilder();
+                logLine.Append($"Connection string: '[{ConnectionString}]'");
+                logLine.Append($"[{ex.Message}] ");
+
+                Logger.Error(logLine.ToString());
             }
 
         }
 
-        private bool CanConnect()
-        {
-            var result = LoginSQL.Length > 0 && PasswordSQL.Length > 0 && SelectedSqlInstance.Length > 0;
-            if (SqlConnection == null) return result;
-            if (SqlConnection.State == System.Data.ConnectionState.Open) return false;
 
-            var b = SqlConnection.State == System.Data.ConnectionState.Closed;
-            var c = SqlConnection.State == System.Data.ConnectionState.Broken;
-
-            return result & (b || c);
-        }
 
         #endregion
 
         public MainWindowViewModel()
         {
+            Logger.Info("Application started.");
             LoadTimers();
             Start();
         }
 
-        private void LoadTimers()
-        {
-            DispatcherTimer t = new DispatcherTimer();
-            t.Interval = TimeSpan.FromMilliseconds(100);
-            t.Tick += new EventHandler((o, e) => CheckConnectionState());
-            t.Start();
-        }
-
-        private void CheckConnectionState()
-        {
-            if (SqlConnection == null)
-            {
-                ConnectionState = "None";
-                return;
-            }
-            ConnectionState = SqlConnection.State.ToString();
-        }
-
-        private void Start()
-        {
-            SqlDatabases = new ObservableCollection<string>();
-            SqlDatabases.CollectionChanged += SqlDatabases_CollectionChanged;
-        }
 
     }
 }

@@ -31,5 +31,5 @@ namespace SQL_Export
 			this.DataContext = vm;
 		}
 
-	}
+    }
 }

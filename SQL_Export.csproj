@@ -2,38 +2,50 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-  
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <TargetFrameworks>net6.0-windows;net7.0-windows</TargetFrameworks>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <publishSingleFile>true</publishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <publishTrimmed>false</publishTrimmed>
     <UseWPF>true</UseWPF>
-  <TargetFramework>net6.0-windows</TargetFramework>
-  <TargetFrameworks>net6.0-windows;net7.0-windows</TargetFrameworks>
 
-	  
-	  <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-	 
-	  <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-	  <ApplicationIcon>cells.ico</ApplicationIcon>
-	  <!--<IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>-->
+    <!-- <Nullable>enable</Nullable> -->
+    <!-- <ImplicitUsings>enable</ImplicitUsings> -->
+
+    <ApplicationIcon>cells.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <None Remove="cells.ico" />
+    <None Remove="Resources\folder.png" />
+    <None Remove="Resources\garbage.png" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.102.2" />
     <PackageReference Include="Microsoft.SqlServer.SqlManagementObjects" Version="171.30.0" />
+    <!-- <PackageReference Include="Microsoft.Data.SqlClient" Version="5.1.4" />
+    <PackageReference Include="Microsoft.Data.SqlClient.SNI" Version="5.1.4" />
+    <PackageReference Include="Microsoft.Data.SqlClient.SNI.runtime" Version="5.1.4" /> -->
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Models\" />
+    <Folder Include="Themes\" />
     <Folder Include="Views\" />
   </ItemGroup>
 
   <ItemGroup>
     <Resource Include="cells.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Resource>
+    <Resource Include="Resources\folder.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Resource>
+    <Resource Include="Resources\garbage.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </Resource>
   </ItemGroup>
 

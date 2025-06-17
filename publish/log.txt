@@ -1,0 +1,22 @@
+SELECT 
+des AS 'ΠΕΡΙΓΡΑΦΗ',
+category_des AS 'ΚΑΤΗΓΟΡΙΑ',
+ISNULL(category_des2, '') AS 'ΥΠΟΚΑΤΗΓΟΡΙΑ',
+CASE
+	WHEN showdes = 'TEM' THEN 'ΤΕΜ'
+	WHEN showdes = 'Kg' THEN 'ΚΙΛ'
+	ELSE showdes
+END  AS 'ΜΟΝ ΜΕΤΡ',
+price AS 'ΤΙΜΗ', 
+fpa AS 'ΦΠΑ',
+ISNULL(barcode,'') as 'ΚΩΔΙΚΟΣ',
+ISNULL(LEFT(barcode,7),
+CONCAT('21',RIGHT(CONCAT('00000', id_external),5))) AS 'ΚΩΔΙΚΟΣ ΖΥΓ',
+ISNULL(team_name, '') AS 'ΖΥΓΑΡΙΑ ΟΝΟΜΑ',
+ISNULL(team_zig_id, '') AS 'ΖΥΓΑΡΙΑ id',
+RIGHT(CONCAT('00000', id_external), 5) AS 'PLU',
+countryImpName as 'ΧΩΡΑ ΓΕΝΝΗΣΗΣ',
+countryFeedName AS 'ΧΩΡΑ ΕΚΤΡΟΦΗΣ',
+qty AS 'ΠΟΣΟΤΗΤΑ'
+FROM dbo.vw_ProductDetails
+order by des
